@@ -1,0 +1,45 @@
+{
+  "name": "@rbxts/falldown",
+  "version": "1.0.0",
+  "description": "",
+  "main": "out/init.luau",
+  "scripts": {
+    "build": "rbxtsc",
+    "build:test": "rbxtsc --rojo test.project.json --type game",
+    "watch": "rbxtsc -w",
+    "prepublishOnly": "npm run build",
+    "rojo:build": "rojo build test.project.json -o testPlace.rbxlx",
+    "rojo:serve": "rojo serve test.project.json"
+  },
+  "keywords": [],
+  "author": "irishfix",
+  "license": "MIT",
+  "types": "out/index.d.ts",
+  "files": [
+    "out/index.d.ts",
+    "out/init.luau"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@rbxts/compiler-types": "^3.0.0-types.0",
+    "@rbxts/types": "^1.0.867",
+    "roblox-ts": "^3.0.0",
+    "typedoc": "^0.28.15",
+    "typedoc-material-theme": "^1.4.1",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@rbxts/beacon": "^2.1.1",
+    "@rbxts/services": "^1.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IrishFix/rbxts-volume3.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IrishFix/rbxts-volume3/issues"
+  },
+  "homepage": "https://irishfix.github.io/rbxts-volume3/"
+}
