@@ -1,7 +1,7 @@
 {
   "name": "@rbxts/falldown",
   "version": "1.0.0",
-  "description": "",
+  "description": "A realistic ragdoll physics system for Roblox with smooth getup animations, collision management, and customizable velocity modes. Supports both R6 and R15 rigs with surface-aware positioning.",
   "main": "out/init.luau",
   "scripts": {
     "build": "rbxtsc",
@@ -11,7 +11,22 @@
     "rojo:build": "rojo build test.project.json -o testPlace.rbxlx",
     "rojo:serve": "rojo serve test.project.json"
   },
-  "keywords": [],
+  "keywords": [
+    "roblox",
+    "roblox-ts",
+    "rbxts",
+    "ragdoll",
+    "physics",
+    "animation",
+    "character",
+    "r6",
+    "r15",
+    "constraints",
+    "humanoid",
+    "getup",
+    "knockback",
+    "velocity"
+  ],
   "author": "irishfix",
   "license": "MIT",
   "types": "out/index.d.ts",
@@ -36,10 +51,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IrishFix/rbxts-volume3.git"
+    "url": "git+https://github.com/IrishFix/rbxts-falldown.git"
   },
   "bugs": {
-    "url": "https://github.com/IrishFix/rbxts-volume3/issues"
+    "url": "https://github.com/IrishFix/rbxts-falldown/issues"
   },
-  "homepage": "https://irishfix.github.io/rbxts-volume3/"
+  "homepage": "https://irishfix.github.io/rbxts-falldown/"
 }
