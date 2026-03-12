@@ -773,6 +773,9 @@ class ActiveRagdoll implements IActiveRagdoll {
                 while (this.Humanoid.MoveDirection.Magnitude <= 0) {
                     RunService.Stepped.Wait();
                 }
+                if (this.HumanoidRootPart.Anchored) {
+                    return;
+                }
                 this.HumanoidRootPart.SetNetworkOwner(this.Owner);
             });
 
@@ -951,6 +954,9 @@ class ActiveRagdoll implements IActiveRagdoll {
                     while (this.Humanoid.MoveDirection.Magnitude <= 0) {
                         RunService.Stepped.Wait();
                     }
+                    if (this.HumanoidRootPart.Anchored) {
+                        return;
+                    }
                     this.HumanoidRootPart.SetNetworkOwner(this.Owner);
                 });
 
@@ -1054,7 +1060,9 @@ export class Falldown {
 
             proxyPart.Parent = Workspace;
 
-            proxyPart.SetNetworkOwner(owner);
+            if (!proxyPart.Anchored) {
+                proxyPart.SetNetworkOwner(owner);
+            }
 
             proxyPart.CollisionGroup = proxyGroupId;
             originalPart.CollisionGroup = bodypartGroupId;
@@ -1109,7 +1117,9 @@ export class Falldown {
 
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
-                descendant.SetNetworkOwner(owner);
+                if (!descendant.Anchored) {
+                    descendant.SetNetworkOwner(owner);
+                }
                 descendant.CollisionGroup = bodypartGroupId;
             }
         }
@@ -1324,7 +1334,9 @@ export class Falldown {
 
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
-                descendant.SetNetworkOwner(owner);
+                if (!descendant.Anchored) {
+                    descendant.SetNetworkOwner(owner);
+                }
                 descendant.CollisionGroup = bodypartGroupId;
             }
         }
