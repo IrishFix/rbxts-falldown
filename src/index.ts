@@ -1017,7 +1017,7 @@ export class Falldown {
 
     private static readonly _activeRagdolls: Map<Model, ActiveRagdoll> = new Map<Model, ActiveRagdoll>();
 
-    private static MakeProxies(bodyPartMap: Map<string, BasePart>, proxyGroupId: string, bodypartGroupId: string): Map<string, BasePart> {
+    private static MakeProxies(bodyPartMap: Map<string, BasePart>, proxyGroupId: string, bodypartGroupId: string, owner: Player | undefined): Map<string, BasePart> {
         PhysicsService.RegisterCollisionGroup(proxyGroupId);
         PhysicsService.RegisterCollisionGroup(bodypartGroupId);
 
@@ -1054,7 +1054,7 @@ export class Falldown {
 
             proxyPart.Parent = Workspace;
 
-            proxyPart.SetNetworkOwner(undefined);
+            proxyPart.SetNetworkOwner(owner);
 
             proxyPart.CollisionGroup = proxyGroupId;
             originalPart.CollisionGroup = bodypartGroupId;
@@ -1102,17 +1102,19 @@ export class Falldown {
         BodyPartMapping.set("Head", head);
         BodyPartMapping.set("HumanoidRootPart", humanoidRootPart);
 
+        const owner = Players.GetPlayerFromCharacter(character);
+
         const proxyGroupId = HttpService.GenerateGUID(false);
         const bodypartGroupId = HttpService.GenerateGUID(false);
 
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
-                descendant.SetNetworkOwner(undefined);
+                descendant.SetNetworkOwner(owner);
                 descendant.CollisionGroup = bodypartGroupId;
             }
         }
 
-        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId);
+        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId, owner);
 
         humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, false);
         humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, false);
@@ -1315,17 +1317,19 @@ export class Falldown {
         BodyPartMapping.set("Head", head);
         BodyPartMapping.set("HumanoidRootPart", humanoidRootPart);
 
+        const owner = Players.GetPlayerFromCharacter(character);
+
         const proxyGroupId = HttpService.GenerateGUID(false);
         const bodypartGroupId = HttpService.GenerateGUID(false);
 
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
-                descendant.SetNetworkOwner(undefined);
+                descendant.SetNetworkOwner(owner);
                 descendant.CollisionGroup = bodypartGroupId;
             }
         }
 
-        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId);
+        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId, owner);
 
         humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, false);
         humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, false);
