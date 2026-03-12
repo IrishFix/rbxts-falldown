@@ -776,7 +776,9 @@ class ActiveRagdoll implements IActiveRagdoll {
                 if (this.HumanoidRootPart.Anchored) {
                     return;
                 }
-                this.HumanoidRootPart.SetNetworkOwner(this.Owner);
+                pcall(() => {
+                    this.HumanoidRootPart.SetNetworkOwner(this.Owner);
+                });
             });
 
             this.Ended.Fire();
@@ -957,7 +959,9 @@ class ActiveRagdoll implements IActiveRagdoll {
                     if (this.HumanoidRootPart.Anchored) {
                         return;
                     }
-                    this.HumanoidRootPart.SetNetworkOwner(this.Owner);
+                    pcall(() => {
+                        this.HumanoidRootPart.SetNetworkOwner(this.Owner);
+                    });
                 });
 
                 this.Humanoid.EvaluateStateMachine = true;
@@ -1061,7 +1065,9 @@ export class Falldown {
             proxyPart.Parent = Workspace;
 
             if (!proxyPart.Anchored) {
-                proxyPart.SetNetworkOwner(owner);
+                pcall(() => {
+                    proxyPart.SetNetworkOwner(owner);
+                });
             }
 
             proxyPart.CollisionGroup = proxyGroupId;
@@ -1118,7 +1124,9 @@ export class Falldown {
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
                 if (!descendant.Anchored) {
-                    descendant.SetNetworkOwner(owner);
+                    pcall(() => {
+                        descendant.SetNetworkOwner(owner);
+                    });
                 }
                 descendant.CollisionGroup = bodypartGroupId;
             }
@@ -1335,7 +1343,9 @@ export class Falldown {
         for (const descendant of character.GetDescendants()) {
             if (descendant.IsA("BasePart")) {
                 if (!descendant.Anchored) {
-                    descendant.SetNetworkOwner(owner);
+                    pcall(() => {
+                        descendant.SetNetworkOwner(owner);
+                    });
                 }
                 descendant.CollisionGroup = bodypartGroupId;
             }
