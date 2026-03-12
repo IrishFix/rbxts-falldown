@@ -744,8 +744,36 @@ class ActiveRagdoll implements IActiveRagdoll {
         const targetCFrame = CFrame.fromMatrix(centerPoint, forwardOnSurface, groundNormal);
 
         if (exitMode === Falldown.ExitMode.Immediate) {
-            // ── Immediate: snap character to standing pose, no clone or animation ──
-            this.Character.PivotTo(targetCFrame);
+            // ── Immediate: raycast down from torso center, stand upright to world ──
+            const torso = this.Character.FindFirstChild("UpperTorso")
+                || this.Character.FindFirstChild("Torso")
+                || this.HumanoidRootPart;
+            const torsoPos = (torso as BasePart).Position;
+
+            const immCastParams = new RaycastParams();
+            immCastParams.FilterDescendantsInstances = [this.Character];
+            immCastParams.FilterType = Enum.RaycastFilterType.Exclude;
+            immCastParams.IgnoreWater = true;
+
+            const immCast = Workspace.Raycast(torsoPos, new Vector3(0, -50, 0), immCastParams);
+            const immGroundPoint = immCast?.Position || torsoPos;
+            const immCenter = immGroundPoint.add(new Vector3(0, this._objectiveHeight, 0));
+
+            // Face along the flattened feet-to-head direction (XZ plane)
+            const head = this.Character.FindFirstChild("Head");
+            const feetMid = this.LeftTouchPart.Position.Lerp(this.RightTouchPart.Position, 0.5);
+            const headPos = (head && head.IsA("BasePart")) ? head.Position : this.HumanoidRootPart.Position;
+            let immFacing = new Vector3(headPos.X - feetMid.X, 0, headPos.Z - feetMid.Z);
+            if (immFacing.Magnitude < 1e-3) {
+                immFacing = new Vector3(this.HumanoidRootPart.CFrame.LookVector.X, 0, this.HumanoidRootPart.CFrame.LookVector.Z);
+            }
+            if (immFacing.Magnitude < 1e-3) {
+                immFacing = new Vector3(0, 0, 1);
+            }
+            immFacing = immFacing.Unit;
+
+            const immTargetCFrame = CFrame.lookAt(immCenter, immCenter.add(immFacing));
+            this.Character.PivotTo(immTargetCFrame);
 
             for (const descendant of this.Character.GetDescendants()) {
                 if (descendant.IsA("BasePart")) {
