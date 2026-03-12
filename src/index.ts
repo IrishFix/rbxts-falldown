@@ -930,6 +930,8 @@ class ActiveRagdoll implements IActiveRagdoll {
 
             this.Ended.Fire();
             this.Ended.Destroy();
+
+            clonedCharacter.Destroy();
         });
 
         PhysicsService.UnregisterCollisionGroup(this._proxyGroupId);
