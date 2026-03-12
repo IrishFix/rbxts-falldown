@@ -425,7 +425,7 @@ export interface IActiveRagdoll {
      * @see {@linkcode IActiveRagdoll.Destroyed}
      * @see {@linkcode Falldown.UnragdollCharacter}
      */
-    Destroy(): void;
+    Destroy(exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode]): void;
 }
 
 class ActiveRagdoll implements IActiveRagdoll {
@@ -475,7 +475,7 @@ class ActiveRagdoll implements IActiveRagdoll {
     private readonly _objectiveHeight: number;
     private readonly _standFadeTime: number;
 
-    constructor(character: Model, objectiveHeight: number, standFadeTime: number, humanoid: Humanoid, humanoidRootPart: BasePart, leftTouchObj: BasePart, rightTouchObj: BasePart, jointDestructionInfo: JointDestructionInfo[], proxyGroupId: string, bodypartGroupId: string, proxyMapping: Map<string, BasePart>, automaticDuration: number | undefined, getupFront: AnimationTrack | undefined, getupBack: AnimationTrack | undefined) {
+    constructor(character: Model, objectiveHeight: number, standFadeTime: number, humanoid: Humanoid, humanoidRootPart: BasePart, leftTouchObj: BasePart, rightTouchObj: BasePart, jointDestructionInfo: JointDestructionInfo[], proxyGroupId: string, bodypartGroupId: string, proxyMapping: Map<string, BasePart>, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: AnimationTrack | undefined, getupBack: AnimationTrack | undefined) {
         character.Destroying.Once(() => {
             this.CharacterDead = true;
             this._jointDestructionInfo.clear();
@@ -520,7 +520,7 @@ class ActiveRagdoll implements IActiveRagdoll {
 
         if (this._automaticDuration && !this.CharacterDead) {
             delay(this._automaticDuration, () => {
-                this.Destroy();
+                this.Destroy(exitMode || Falldown.ExitMode.Smooth);
             });
         }
     }
@@ -641,7 +641,7 @@ class ActiveRagdoll implements IActiveRagdoll {
      * @see {@linkcode ActiveRagdoll.Destroyed}
      * @see {@linkcode Falldown.UnragdollCharacter}
      */
-    public Destroy(overrideDeathLock?: boolean) {
+    public Destroy(exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode], overrideDeathLock?: boolean) {
         if (this.Character.Parent === undefined) {
             return;
         }
@@ -654,61 +654,7 @@ class ActiveRagdoll implements IActiveRagdoll {
             return;
         }
 
-        const clonedCharacter = new Instance("Model");
-        clonedCharacter.Name = "Falldown_FadeClone_Temp";
-
-        const humanoid = new Instance("Humanoid");
-        const animator = humanoid.FindFirstChildOfClass("Animator");
-        humanoid.RigType = this.Humanoid.RigType;
-        humanoid.RequiresNeck = false;
-        humanoid.AutoRotate = false;
-        if (animator) {
-            for (const anim of animator.GetPlayingAnimationTracks()) {
-                anim.Stop();
-            }
-            animator.Destroy();
-        }
-
-        const cloneCG = HttpService.GenerateGUID(false);
-        PhysicsService.RegisterCollisionGroup(cloneCG);
-        PhysicsService.CollisionGroupSetCollidable(cloneCG, "Default", false);
-        PhysicsService.CollisionGroupSetCollidable(cloneCG, this._bodypartGroupId, false);
-        PhysicsService.CollisionGroupSetCollidable(cloneCG, cloneCG, false);
-
-        const cloneToRealMap: Map<BasePart, BasePart> = new Map<BasePart, BasePart>();
-        const originalTransparencies: Map<BasePart | Decal, number> = new Map<BasePart | Decal, number>();
-
-        for (const descendant of this.Character.GetDescendants()) {
-            if (descendant.IsA("BasePart")) {
-                const partClone = descendant.Clone();
-                partClone.Anchored = true;
-                partClone.CollisionGroup = cloneCG;
-                partClone.CFrame = descendant.CFrame;
-
-                cloneToRealMap.set(partClone, descendant);
-                originalTransparencies.set(descendant, descendant.Transparency);
-                for (const partDesc of partClone.GetDescendants()) {
-                    if (partDesc.IsA("JointInstance") || partDesc.IsA("Constraint") || partDesc.IsA("Attachment")) {
-                        partDesc.Destroy();
-                    } else if (partDesc.IsA("Decal")) {
-                        originalTransparencies.set(descendant.FindFirstChild(partDesc.Name) as Decal, partDesc.Transparency);
-                    }
-                }
-
-                partClone.Parent = clonedCharacter;
-            } else if (descendant.IsA("Clothing")) {
-                const clothingClone = descendant.Clone();
-                clothingClone.Parent = clonedCharacter;
-            }
-        }
-
-        humanoid.Parent = clonedCharacter;
-        clonedCharacter.Parent = Workspace;
-
-        for (const [thing, originalTransparency] of originalTransparencies) {
-            thing.Transparency = 1;
-        }
-        
+        // ── Shared: remove ragdoll constraints, restore Motor6Ds ──
         for (const info of this._jointDestructionInfo) {
             info.Replaced.Enabled = true;
             info.Constraint.Destroy();
@@ -735,25 +681,13 @@ class ActiveRagdoll implements IActiveRagdoll {
             }
         }
 
-        this.Humanoid.PlatformStand = false;
-        this.Humanoid.ChangeState(Enum.HumanoidStateType.GettingUp);
-        this.HumanoidRootPart.Anchored = true;
-
-        //const thisAnimator = this.Humanoid.FindFirstChildOfClass("Animator");
-        //if (thisAnimator) {
-        //    for (const anim of thisAnimator.GetPlayingAnimationTracks()) {
-        //        anim.Stop(0);
-        //    }
-        //}
-
+        // ── Shared: destroy proxy parts ──
         for (const [, proxyPart] of this._proxyMapping) {
             proxyPart.Destroy();
         }
         this._proxyMapping.clear();
-        
-        const facing = ActiveRagdoll.GetVerticalDirection(this.HumanoidRootPart.CFrame.LookVector);
-        let activeAnimation: AnimationTrack | undefined = undefined;
 
+        // ── Shared: raycast for ground & compute stand CFrame ──
         const leftToes = this.LeftTouchPart.CFrame.mul(new CFrame(0, -(this.LeftTouchPart.Size.Y / 2), 0));
 		const rightToes = this.RightTouchPart.CFrame.mul(new CFrame(0, -(this.RightTouchPart.Size.Y / 2), 0));
 
@@ -806,96 +740,11 @@ class ActiveRagdoll implements IActiveRagdoll {
         }
         right = right.Unit;
         const forwardOnSurface = right.Cross(groundNormal).Unit;
+        const targetCFrame = CFrame.fromMatrix(centerPoint, forwardOnSurface, groundNormal);
 
-        if (facing === 0) {
-            activeAnimation = this.GetupBackAnimation;
-        } else {
-            activeAnimation = this.GetupFrontAnimation;
-        }
-
-        task.spawn(() => {
-            if (activeAnimation) {
-                const targetCFrame = CFrame.fromMatrix(centerPoint, forwardOnSurface, groundNormal);
-                this.Character.PivotTo(targetCFrame);
-                activeAnimation.Play(0, 1, 0);
-
-                while (!activeAnimation.IsPlaying) {
-                    task.wait();
-                }
-
-                activeAnimation.TimePosition = 0.0;
-                task.wait();
-
-                let activeLerp = 0;
-                task.spawn(() => {
-                    while (true) {
-                        const dt = task.wait(1/60);
-                        let lerpAlpha = activeLerp + (dt / math.min(this._standFadeTime, activeAnimation.Length));
-                        let ended = false;
-                        if (lerpAlpha >= 1) {
-                            ended = true;
-                            lerpAlpha = 1;
-                        }
-
-                        for (const [partClone, realPart] of cloneToRealMap) {
-                            partClone.CFrame = partClone.CFrame.Lerp(realPart.CFrame, lerpAlpha);
-                        }
-
-                        activeLerp = lerpAlpha;
-                        if (ended) {
-                            for (const [partClone, realPart] of cloneToRealMap) {
-                                partClone.Destroy();
-                            }
-
-                            for (const [thing, originalTransparency] of originalTransparencies) {
-                                thing.Transparency = originalTransparency;
-                            }
-
-                            return;
-                        }
-                    }
-                });
-                activeAnimation.AdjustSpeed(1);
-
-                activeAnimation.Ended.Wait();
-            } else {
-                const targetCFrame = CFrame.fromMatrix(centerPoint, forwardOnSurface, groundNormal);
-                this.Character.PivotTo(targetCFrame);
-
-                task.wait();
-
-                let activeLerp = 0;
-                task.spawn(() => {
-                    while (true) {
-                        const dt = task.wait(1/60);
-                        let lerpAlpha = activeLerp + (dt / this._standFadeTime);
-                        let ended = false;
-                        if (lerpAlpha >= 1) {
-                            ended = true;
-                            lerpAlpha = 1;
-                        }
-
-                        for (const [partClone, realPart] of cloneToRealMap) {
-                            partClone.CFrame = partClone.CFrame.Lerp(realPart.CFrame, lerpAlpha);
-                        }
-
-                        activeLerp = lerpAlpha;
-                        if (ended) {
-                            for (const [partClone, realPart] of cloneToRealMap) {
-                                partClone.Destroy();
-                            }
-
-                            for (const [thing, originalTransparency] of originalTransparencies) {
-                                thing.Transparency = originalTransparency;
-                            }
-
-                            return;
-                        }
-                    }
-                });
-
-                task.wait(this._standFadeTime);
-            }
+        if (exitMode === Falldown.ExitMode.Immediate) {
+            // ── Immediate: snap character to standing pose, no clone or animation ──
+            this.Character.PivotTo(targetCFrame);
 
             for (const descendant of this.Character.GetDescendants()) {
                 if (descendant.IsA("BasePart")) {
@@ -912,7 +761,12 @@ class ActiveRagdoll implements IActiveRagdoll {
             this.Humanoid.PlatformStand = false;
             this.HumanoidRootPart.Anchored = false;
 
-            RunService.Heartbeat.Wait();
+            this.Humanoid.EvaluateStateMachine = true;
+
+            this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, true);
+            this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, true);
+
+            this.Humanoid.ChangeState(Enum.HumanoidStateType.Running);
 
             task.defer(() => {
                 while (this.Humanoid.MoveDirection.Magnitude <= 0) {
@@ -921,18 +775,197 @@ class ActiveRagdoll implements IActiveRagdoll {
                 this.HumanoidRootPart.SetNetworkOwner(this.Owner);
             });
 
-            this.Humanoid.EvaluateStateMachine = true;
-
-            this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, true);
-            this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, true);
-
-            this.Humanoid.ChangeState(Enum.HumanoidStateType.Running);
-
             this.Ended.Fire();
             this.Ended.Destroy();
+        } else {
+            // ── Smooth: create fade clone, play getup animation, tween ──
+            const clonedCharacter = new Instance("Model");
+            clonedCharacter.Name = "Falldown_FadeClone_Temp";
 
-            clonedCharacter.Destroy();
-        });
+            const humanoid = new Instance("Humanoid");
+            const animator = humanoid.FindFirstChildOfClass("Animator");
+            humanoid.RigType = this.Humanoid.RigType;
+            humanoid.RequiresNeck = false;
+            humanoid.AutoRotate = false;
+            if (animator) {
+                for (const anim of animator.GetPlayingAnimationTracks()) {
+                    anim.Stop();
+                }
+                animator.Destroy();
+            }
+
+            const cloneCG = HttpService.GenerateGUID(false);
+            PhysicsService.RegisterCollisionGroup(cloneCG);
+            PhysicsService.CollisionGroupSetCollidable(cloneCG, "Default", false);
+            PhysicsService.CollisionGroupSetCollidable(cloneCG, this._bodypartGroupId, false);
+            PhysicsService.CollisionGroupSetCollidable(cloneCG, cloneCG, false);
+
+            const cloneToRealMap: Map<BasePart, BasePart> = new Map<BasePart, BasePart>();
+            const originalTransparencies: Map<BasePart | Decal, number> = new Map<BasePart | Decal, number>();
+
+            for (const descendant of this.Character.GetDescendants()) {
+                if (descendant.IsA("BasePart")) {
+                    const partClone = descendant.Clone();
+                    partClone.Anchored = true;
+                    partClone.CollisionGroup = cloneCG;
+                    partClone.CFrame = descendant.CFrame;
+
+                    cloneToRealMap.set(partClone, descendant);
+                    originalTransparencies.set(descendant, descendant.Transparency);
+                    for (const partDesc of partClone.GetDescendants()) {
+                        if (partDesc.IsA("JointInstance") || partDesc.IsA("Constraint") || partDesc.IsA("Attachment")) {
+                            partDesc.Destroy();
+                        } else if (partDesc.IsA("Decal")) {
+                            originalTransparencies.set(descendant.FindFirstChild(partDesc.Name) as Decal, partDesc.Transparency);
+                        }
+                    }
+
+                    partClone.Parent = clonedCharacter;
+                } else if (descendant.IsA("Clothing")) {
+                    const clothingClone = descendant.Clone();
+                    clothingClone.Parent = clonedCharacter;
+                }
+            }
+
+            humanoid.Parent = clonedCharacter;
+            clonedCharacter.Parent = Workspace;
+
+            for (const [thing, originalTransparency] of originalTransparencies) {
+                thing.Transparency = 1;
+            }
+
+            this.Humanoid.PlatformStand = false;
+            this.Humanoid.ChangeState(Enum.HumanoidStateType.GettingUp);
+            this.HumanoidRootPart.Anchored = true;
+
+            const facing = ActiveRagdoll.GetVerticalDirection(this.HumanoidRootPart.CFrame.LookVector);
+            let activeAnimation: AnimationTrack | undefined = undefined;
+
+            if (facing === 0) {
+                activeAnimation = this.GetupBackAnimation;
+            } else {
+                activeAnimation = this.GetupFrontAnimation;
+            }
+
+            task.spawn(() => {
+                if (activeAnimation) {
+                    this.Character.PivotTo(targetCFrame);
+                    activeAnimation.Play(0, 1, 0);
+
+                    while (!activeAnimation.IsPlaying) {
+                        task.wait();
+                    }
+
+                    activeAnimation.TimePosition = 0.0;
+                    task.wait();
+
+                    let activeLerp = 0;
+                    task.spawn(() => {
+                        while (true) {
+                            const dt = task.wait(1/60);
+                            let lerpAlpha = activeLerp + (dt / math.min(this._standFadeTime, activeAnimation.Length));
+                            let ended = false;
+                            if (lerpAlpha >= 1) {
+                                ended = true;
+                                lerpAlpha = 1;
+                            }
+
+                            for (const [partClone, realPart] of cloneToRealMap) {
+                                partClone.CFrame = partClone.CFrame.Lerp(realPart.CFrame, lerpAlpha);
+                            }
+
+                            activeLerp = lerpAlpha;
+                            if (ended) {
+                                for (const [partClone, realPart] of cloneToRealMap) {
+                                    partClone.Destroy();
+                                }
+
+                                for (const [thing, originalTransparency] of originalTransparencies) {
+                                    thing.Transparency = originalTransparency;
+                                }
+
+                                return;
+                            }
+                        }
+                    });
+                    activeAnimation.AdjustSpeed(1);
+
+                    activeAnimation.Ended.Wait();
+                } else {
+                    this.Character.PivotTo(targetCFrame);
+
+                    task.wait();
+
+                    let activeLerp = 0;
+                    task.spawn(() => {
+                        while (true) {
+                            const dt = task.wait(1/60);
+                            let lerpAlpha = activeLerp + (dt / this._standFadeTime);
+                            let ended = false;
+                            if (lerpAlpha >= 1) {
+                                ended = true;
+                                lerpAlpha = 1;
+                            }
+
+                            for (const [partClone, realPart] of cloneToRealMap) {
+                                partClone.CFrame = partClone.CFrame.Lerp(realPart.CFrame, lerpAlpha);
+                            }
+
+                            activeLerp = lerpAlpha;
+                            if (ended) {
+                                for (const [partClone, realPart] of cloneToRealMap) {
+                                    partClone.Destroy();
+                                }
+
+                                for (const [thing, originalTransparency] of originalTransparencies) {
+                                    thing.Transparency = originalTransparency;
+                                }
+
+                                return;
+                            }
+                        }
+                    });
+
+                    task.wait(this._standFadeTime);
+                }
+
+                for (const descendant of this.Character.GetDescendants()) {
+                    if (descendant.IsA("BasePart")) {
+                        descendant.Anchored = false;
+                        descendant.AssemblyLinearVelocity = Vector3.zero;
+                        descendant.AssemblyAngularVelocity = Vector3.zero;
+                        if (descendant.GetAttribute("Falldown_Reverse_CC_To") !== undefined) {
+                            descendant.CanCollide = descendant.GetAttribute("Falldown_Reverse_CC_To") as boolean;
+                            descendant.SetAttribute("Falldown_Reverse_CC_To", undefined);
+                        }
+                    }
+                }
+
+                this.Humanoid.PlatformStand = false;
+                this.HumanoidRootPart.Anchored = false;
+
+                RunService.Heartbeat.Wait();
+
+                task.defer(() => {
+                    while (this.Humanoid.MoveDirection.Magnitude <= 0) {
+                        RunService.Stepped.Wait();
+                    }
+                    this.HumanoidRootPart.SetNetworkOwner(this.Owner);
+                });
+
+                this.Humanoid.EvaluateStateMachine = true;
+
+                this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, true);
+                this.Humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, true);
+
+                this.Humanoid.ChangeState(Enum.HumanoidStateType.Running);
+
+                this.Ended.Fire();
+                this.Ended.Destroy();
+
+                clonedCharacter.Destroy();
+            });
+        }
 
         PhysicsService.UnregisterCollisionGroup(this._proxyGroupId);
         PhysicsService.UnregisterCollisionGroup(this._bodypartGroupId);
@@ -965,6 +998,20 @@ export class Falldown {
         SplitEqual: 2,
         /** Each part gets a random velocity from 0 to the specified magnitude in the same direction. Creates varied motion, useful for explosions. */
         RandomMax: 3
+    } as const;
+
+    /** 
+     * Enum used to represent how a ragdolled character should exit the ragdoll state.
+     * @static
+     * @readonly
+     * @enum {number}
+     * @see {@linkcode IActiveRagdoll.Destroy}
+     */
+    static ExitMode = {
+        /** Character will play the appropriate getup animation and stand up on their own. Default behavior. */
+        Smooth: 0,
+        /** Character will be restored at its current exact ragdoll position, standing with no fade or animations */
+        Immediate: 1
     } as const;
 
     private static readonly _activeRagdolls: Map<Model, ActiveRagdoll> = new Map<Model, ActiveRagdoll>();
@@ -1017,7 +1064,7 @@ export class Falldown {
         return proxyMap;
     }
 
-    private static CreateActiveRagdollR6(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
+    private static CreateActiveRagdollR6(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
         const leftArm = character.FindFirstChild("Left Arm");
         const rightArm = character.FindFirstChild("Right Arm");
         const leftLeg = character.FindFirstChild("Left Leg");
@@ -1200,10 +1247,10 @@ export class Falldown {
 
         humanoid.EvaluateStateMachine = false;
 
-        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftLeg, rightLeg, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, getupFrontTrack, getupBackTrack);
+        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftLeg, rightLeg, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
     }
 
-    private static CreateActiveRagdollR15(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
+    private static CreateActiveRagdollR15(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
         const leftUpperArm = character.FindFirstChild("LeftUpperArm");
         const leftLowerArm = character.FindFirstChild("LeftLowerArm");
         const leftHand = character.FindFirstChild("LeftHand");
@@ -1503,7 +1550,7 @@ export class Falldown {
 
         humanoid.EvaluateStateMachine = false;
 
-        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftFoot, rightFoot, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, getupFrontTrack, getupBackTrack);
+        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftFoot, rightFoot, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
     }
 
     /** 
@@ -1519,7 +1566,7 @@ export class Falldown {
      * @see {@linkcode Falldown.UnragdollCharacter}
      * @see {@linkcode Falldown.VelocityMode}
      */
-    public static RagdollCharacter(character: Model, standupFadeTime: number, automaticDuration?: number, getupFront?: Animation, getupBack?: Animation): IActiveRagdoll | undefined {
+    public static RagdollCharacter(character: Model, standupFadeTime: number, automaticDuration?: number, exitMode?: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode], getupFront?: Animation, getupBack?: Animation): IActiveRagdoll | undefined {
         if (this._activeRagdolls.has(character)) {
 		    return undefined;
 	    }
@@ -1530,7 +1577,7 @@ export class Falldown {
         }
 
         if (humanoid.RigType === Enum.HumanoidRigType.R6) {
-            const createdActiveRagdoll = this.CreateActiveRagdollR6(character, humanoid, standupFadeTime, automaticDuration, getupFront, getupBack);
+            const createdActiveRagdoll = this.CreateActiveRagdollR6(character, humanoid, standupFadeTime, automaticDuration, exitMode, getupFront, getupBack);
             if (createdActiveRagdoll) {
                 this._activeRagdolls.set(character, createdActiveRagdoll);
                 createdActiveRagdoll.Destroyed.Once(() => {
@@ -1543,7 +1590,7 @@ export class Falldown {
                 return undefined;
             }
         } else {
-            const createdActiveRagdoll = this.CreateActiveRagdollR15(character, humanoid, standupFadeTime, automaticDuration, getupFront, getupBack);
+            const createdActiveRagdoll = this.CreateActiveRagdollR15(character, humanoid, standupFadeTime, automaticDuration, exitMode, getupFront, getupBack);
             if (createdActiveRagdoll) {
                 this._activeRagdolls.set(character, createdActiveRagdoll);
                 createdActiveRagdoll.Destroyed.Once(() => {
@@ -1567,7 +1614,7 @@ export class Falldown {
      * @see {@linkcode Falldown.RagdollCharacter}
      * @see {@linkcode Falldown.UnragdollAllCharacters}
      */
-    public static UnragdollCharacter(character: Model, delayTime?: number) {
+    public static UnragdollCharacter(character: Model, delayTime?: number, exitMode?: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode]) {
         const activeRagdoll = this._activeRagdolls.get(character);
 
         if (activeRagdoll) {
@@ -1575,16 +1622,25 @@ export class Falldown {
                 delay(delayTime, () => {
                     if (this._activeRagdolls.has(character)) {
                         this._activeRagdolls.delete(character);
-                        activeRagdoll.Destroy();
+                        activeRagdoll.Destroy(exitMode || Falldown.ExitMode.Smooth);
                     }
                 });
             } else {
                 if (this._activeRagdolls.has(character)) {
                     this._activeRagdolls.delete(character);
-                    activeRagdoll.Destroy();
+                    activeRagdoll.Destroy(exitMode || Falldown.ExitMode.Smooth);
                 }
             }
 	    }
+    }
+
+    /**
+     * @static
+     * @param character - The character `Model` to check
+     * @returns Whether the character is currently ragdolled
+     */
+    public static IsCharacterRagdolled(character: Model): boolean {
+        return this._activeRagdolls.has(character);
     }
 
     /** 
@@ -1594,13 +1650,13 @@ export class Falldown {
      * @see {@linkcode Falldown.UnragdollCharacter}
      * @see {@linkcode Falldown.RagdollCharacter}
      */
-    public static UnragdollAllCharacters(delayTime?: number) {
+    public static UnragdollAllCharacters(delayTime?: number, exitMode?: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode]) {
         if (delayTime) {
             delay(delayTime, () => {
                 for (const [character, activeRagdoll] of this._activeRagdolls) {
                     if (this._activeRagdolls.has(character)) {
                         this._activeRagdolls.delete(character);
-                        activeRagdoll.Destroy();
+                        activeRagdoll.Destroy(exitMode || Falldown.ExitMode.Smooth);
                     }
                 }
             });
@@ -1608,7 +1664,7 @@ export class Falldown {
             for (const [character, activeRagdoll] of this._activeRagdolls) {
                 if (this._activeRagdolls.has(character)) {
                     this._activeRagdolls.delete(character);
-                    activeRagdoll.Destroy();
+                    activeRagdoll.Destroy(exitMode || Falldown.ExitMode.Smooth);
                 }
             }
         }
