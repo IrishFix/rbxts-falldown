@@ -705,6 +705,7 @@ class ActiveRagdoll implements IActiveRagdoll {
         const gravity = new Vector3(0, -1, 0);
         const gDot = gravity.Dot(groundNormal);
         let downhill = gravity.sub(groundNormal.mul(gDot));
+        const isSloped = downhill.Magnitude >= 0.05;
         if (downhill.Magnitude < 1e-3) {
             downhill = new Vector3(0, 0, 1);
         }
@@ -727,7 +728,7 @@ class ActiveRagdoll implements IActiveRagdoll {
                 along = downhill;
             }
 
-            if (along.Dot(downhill) < 0) {
+            if (isSloped && along.Dot(downhill) < 0) {
                 along = along.mul(-1);
             }
             return along.Unit;
@@ -1085,7 +1086,7 @@ export class Falldown {
 
         const primaryPos = character.GetPivot().Position;
         const endPos = (leftLeg.CFrame.mul(new CFrame(0, -leftLeg.Size.Y / 2, 0)).Position).Lerp(rightLeg.CFrame.mul(new CFrame(0, -rightLeg.Size.Y / 2, 0)).Position, 0.5);
-        const height = (primaryPos.sub(endPos)).Magnitude;
+        const height = math.abs(primaryPos.Y - endPos.Y);
 
         humanoid.ChangeState(Enum.HumanoidStateType.Physics);
         const animator = humanoid.FindFirstChildOfClass("Animator") || new Instance("Animator", humanoid);
@@ -1289,7 +1290,7 @@ export class Falldown {
 
         const primaryPos = character.GetPivot().Position;
         const endPos = (leftFoot.CFrame.mul(new CFrame(0, -leftFoot.Size.Y / 2, 0)).Position).Lerp(rightFoot.CFrame.mul(new CFrame(0, -rightFoot.Size.Y / 2, 0)).Position, 0.5);
-        const height = (primaryPos.sub(endPos)).Magnitude;
+        const height = math.abs(primaryPos.Y - endPos.Y);
 
         humanoid.ChangeState(Enum.HumanoidStateType.Physics)
         const animator = humanoid.FindFirstChildOfClass("Animator") || new Instance("Animator", humanoid);
