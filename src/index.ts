@@ -759,11 +759,14 @@ class ActiveRagdoll implements IActiveRagdoll {
             const immGroundPoint = immCast?.Position || torsoPos;
             const immCenter = immGroundPoint.add(new Vector3(0, this._objectiveHeight, 0));
 
-            // Face along the flattened feet-to-head direction (XZ plane)
+            // Determine facing: front (belly down) = feet->head, back = head->feet
+            const immFacing_raw = ActiveRagdoll.GetVerticalDirection(this.HumanoidRootPart.CFrame.LookVector);
             const head = this.Character.FindFirstChild("Head");
             const feetMid = this.LeftTouchPart.Position.Lerp(this.RightTouchPart.Position, 0.5);
             const headPos = (head && head.IsA("BasePart")) ? head.Position : this.HumanoidRootPart.Position;
-            let immFacing = new Vector3(headPos.X - feetMid.X, 0, headPos.Z - feetMid.Z);
+            const feetToHead = new Vector3(headPos.X - feetMid.X, 0, headPos.Z - feetMid.Z);
+            // facing === 1 means belly down (front), 0 means back down
+            let immFacing = immFacing_raw === 1 ? feetToHead : feetToHead.mul(-1);
             if (immFacing.Magnitude < 1e-3) {
                 immFacing = new Vector3(this.HumanoidRootPart.CFrame.LookVector.X, 0, this.HumanoidRootPart.CFrame.LookVector.Z);
             }
