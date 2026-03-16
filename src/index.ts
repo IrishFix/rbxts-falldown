@@ -469,13 +469,11 @@ class ActiveRagdoll implements IActiveRagdoll {
 
     private readonly _automaticDuration: number | undefined;
     private readonly _jointDestructionInfo: JointDestructionInfo[];
-    private readonly _proxyGroupId: string;
     private readonly _bodypartGroupId: string;
-    private readonly _proxyMapping: Map<string, BasePart>;
     private readonly _objectiveHeight: number;
     private readonly _standFadeTime: number;
 
-    constructor(character: Model, objectiveHeight: number, standFadeTime: number, humanoid: Humanoid, humanoidRootPart: BasePart, leftTouchObj: BasePart, rightTouchObj: BasePart, jointDestructionInfo: JointDestructionInfo[], proxyGroupId: string, bodypartGroupId: string, proxyMapping: Map<string, BasePart>, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: AnimationTrack | undefined, getupBack: AnimationTrack | undefined) {
+    constructor(character: Model, objectiveHeight: number, standFadeTime: number, humanoid: Humanoid, humanoidRootPart: BasePart, leftTouchObj: BasePart, rightTouchObj: BasePart, jointDestructionInfo: JointDestructionInfo[], bodypartGroupId: string, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: AnimationTrack | undefined, getupBack: AnimationTrack | undefined) {
         character.Destroying.Once(() => {
             this.CharacterDead = true;
             this._jointDestructionInfo.clear();
@@ -512,9 +510,7 @@ class ActiveRagdoll implements IActiveRagdoll {
 
         this._automaticDuration = automaticDuration;
         this._jointDestructionInfo = jointDestructionInfo;
-        this._proxyGroupId = proxyGroupId;
         this._bodypartGroupId = bodypartGroupId;
-        this._proxyMapping = proxyMapping;
         this._objectiveHeight = objectiveHeight;
         this._standFadeTime = standFadeTime;
 
@@ -554,7 +550,7 @@ class ActiveRagdoll implements IActiveRagdoll {
             return;
         }
 
-        if (this._jointDestructionInfo.isEmpty() || this._proxyMapping.isEmpty()) {
+        if (this._jointDestructionInfo.isEmpty()) {
             return;
         }
 
@@ -607,7 +603,7 @@ class ActiveRagdoll implements IActiveRagdoll {
             return;
         }
 
-        if (this._jointDestructionInfo.isEmpty() || this._proxyMapping.isEmpty()) {
+        if (this._jointDestructionInfo.isEmpty()) {
             return;
         }
 
@@ -650,7 +646,7 @@ class ActiveRagdoll implements IActiveRagdoll {
             return;
         }
 
-        if (this._jointDestructionInfo.isEmpty() || this._proxyMapping.isEmpty()) {
+        if (this._jointDestructionInfo.isEmpty()) {
             return;
         }
 
@@ -680,12 +676,6 @@ class ActiveRagdoll implements IActiveRagdoll {
 				descendant.AssemblyAngularVelocity = Vector3.zero;
             }
         }
-
-        // ── Shared: destroy proxy parts ──
-        for (const [, proxyPart] of this._proxyMapping) {
-            proxyPart.Destroy();
-        }
-        this._proxyMapping.clear();
 
         // ── Shared: raycast for ground & compute stand CFrame ──
         const leftToes = this.LeftTouchPart.CFrame.mul(new CFrame(0, -(this.LeftTouchPart.Size.Y / 2), 0));
@@ -1009,7 +999,6 @@ class ActiveRagdoll implements IActiveRagdoll {
             });
         }
 
-        PhysicsService.UnregisterCollisionGroup(this._proxyGroupId);
         PhysicsService.UnregisterCollisionGroup(this._bodypartGroupId);
 
         this.Destroyed.Fire();
@@ -1058,56 +1047,13 @@ export class Falldown {
 
     private static readonly _activeRagdolls: Map<Model, ActiveRagdoll> = new Map<Model, ActiveRagdoll>();
 
-    private static MakeProxies(bodyPartMap: Map<string, BasePart>, proxyGroupId: string, bodypartGroupId: string, owner: Player | undefined): Map<string, BasePart> {
-        PhysicsService.RegisterCollisionGroup(proxyGroupId);
+    private static SetupCollisionGroup(bodyPartMap: Map<string, BasePart>, bodypartGroupId: string) {
         PhysicsService.RegisterCollisionGroup(bodypartGroupId);
-
-        PhysicsService.CollisionGroupSetCollidable(proxyGroupId, bodypartGroupId, false);
-        PhysicsService.CollisionGroupSetCollidable(proxyGroupId, "Default", true);
-        PhysicsService.CollisionGroupSetCollidable(bodypartGroupId, "Default", false);
         PhysicsService.CollisionGroupSetCollidable(bodypartGroupId, bodypartGroupId, false);
 
-        const proxyMap: Map<string, BasePart> = new Map<string, BasePart>();
-        for (const [partName, originalPart] of bodyPartMap) {
-            const proxyPart = new Instance("Part");
-            proxyPart.Name = partName + "_Colprox";
-            proxyPart.Size = originalPart.Size;
-            proxyPart.Transparency = 1;
-            proxyPart.CastShadow = false;
-            proxyPart.CanCollide = true;
-            proxyPart.CanQuery = false;
-            proxyPart.CanTouch = false;
-            proxyPart.Anchored = false;
-            proxyPart.Massless = false;
-            proxyPart.CFrame = originalPart.CFrame;
-            proxyPart.CustomPhysicalProperties = new PhysicalProperties(1, 2, 0, 1, 1);
-
-            if (partName === "HumanoidRootPart") {
-                proxyPart.CanCollide = false;
-            }
-
-            const weld = new Instance("Weld");
-            weld.Name = partName + "_Colprox_Weld";
-            weld.Part0 = originalPart;
-            weld.Part1 = proxyPart;
-            weld.C0 = CFrame.identity;
-            weld.Parent = proxyPart;
-
-            proxyPart.Parent = Workspace;
-
-            if (!proxyPart.Anchored) {
-                pcall(() => {
-                    proxyPart.SetNetworkOwner(owner);
-                });
-            }
-
-            proxyPart.CollisionGroup = proxyGroupId;
+        for (const [, originalPart] of bodyPartMap) {
             originalPart.CollisionGroup = bodypartGroupId;
-
-            proxyMap.set(partName, proxyPart);
         }
-
-        return proxyMap;
     }
 
     private static CreateActiveRagdollR6(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
@@ -1149,21 +1095,17 @@ export class Falldown {
 
         const owner = Players.GetPlayerFromCharacter(character);
 
-        const proxyGroupId = HttpService.GenerateGUID(false);
         const bodypartGroupId = HttpService.GenerateGUID(false);
 
         for (const descendant of character.GetDescendants()) {
-            if (descendant.IsA("BasePart")) {
-                if (!descendant.Anchored) {
-                    pcall(() => {
-                        descendant.SetNetworkOwner(owner);
-                    });
-                }
-                descendant.CollisionGroup = bodypartGroupId;
+            if (descendant.IsA("BasePart") && !descendant.Anchored) {
+                pcall(() => {
+                    descendant.SetNetworkOwner(owner);
+                });
             }
         }
 
-        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId, owner);
+        this.SetupCollisionGroup(BodyPartMapping, bodypartGroupId);
 
         humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, false);
         humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, false);
@@ -1242,12 +1184,6 @@ export class Falldown {
             joint.TwistUpperAngle = info.Info.TwistUpperAngle;
             joint.TwistLowerAngle = info.Info.TwistLowerAngle;
 
-            const proxyNoCol0 = new Instance("NoCollisionConstraint");
-            proxyNoCol0.Name = constraintName + "_NoColProxyOnly";
-            proxyNoCol0.Parent = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part0 = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part1 = ProxyMapping.get(part1.Name);
-
             replacing.Enabled = false;
 
             destructionInfo.push({
@@ -1273,12 +1209,6 @@ export class Falldown {
             weld.Part0 = part0;
             weld.Part1 = part1;
 
-            const proxyNoCol0 = new Instance("NoCollisionConstraint");
-            proxyNoCol0.Name = constraintName + "_NoColProxyOnly";
-            proxyNoCol0.Parent = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part0 = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part1 = ProxyMapping.get(part1.Name);
-
             replacing.Enabled = false;
 
             destructionInfo.push({
@@ -1299,7 +1229,7 @@ export class Falldown {
 
         humanoid.EvaluateStateMachine = false;
 
-        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftLeg, rightLeg, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
+        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftLeg, rightLeg, destructionInfo, bodypartGroupId, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
     }
 
     private static CreateActiveRagdollR15(character: Model, humanoid: Humanoid, standFadeTime: number, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: Animation | undefined, getupBack: Animation | undefined): ActiveRagdoll | undefined {
@@ -1368,21 +1298,17 @@ export class Falldown {
 
         const owner = Players.GetPlayerFromCharacter(character);
 
-        const proxyGroupId = HttpService.GenerateGUID(false);
         const bodypartGroupId = HttpService.GenerateGUID(false);
 
         for (const descendant of character.GetDescendants()) {
-            if (descendant.IsA("BasePart")) {
-                if (!descendant.Anchored) {
-                    pcall(() => {
-                        descendant.SetNetworkOwner(owner);
-                    });
-                }
-                descendant.CollisionGroup = bodypartGroupId;
+            if (descendant.IsA("BasePart") && !descendant.Anchored) {
+                pcall(() => {
+                    descendant.SetNetworkOwner(owner);
+                });
             }
         }
 
-        const ProxyMapping = this.MakeProxies(BodyPartMapping, proxyGroupId, bodypartGroupId, owner);
+        this.SetupCollisionGroup(BodyPartMapping, bodypartGroupId);
 
         humanoid.SetStateEnabled(Enum.HumanoidStateType.Jumping, false);
         humanoid.SetStateEnabled(Enum.HumanoidStateType.GettingUp, false);
@@ -1506,12 +1432,6 @@ export class Falldown {
             joint.TwistUpperAngle = info.Info.TwistUpperAngle;
             joint.TwistLowerAngle = info.Info.TwistLowerAngle;
 
-            const proxyNoCol0 = new Instance("NoCollisionConstraint");
-            proxyNoCol0.Name = constraintName + "_NoColProxyOnly";
-            proxyNoCol0.Parent = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part0 = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part1 = ProxyMapping.get(part1.Name);
-
             replacing.Enabled = false;
 
             destructionInfo.push({
@@ -1552,12 +1472,6 @@ export class Falldown {
             joint.UpperAngle = info.Info.UpperAngle;
             joint.LowerAngle = info.Info.LowerAngle;
 
-            const proxyNoCol0 = new Instance("NoCollisionConstraint");
-            proxyNoCol0.Name = constraintName + "_NoColProxyOnly";
-            proxyNoCol0.Parent = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part0 = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part1 = ProxyMapping.get(part1.Name);
-
             replacing.Enabled = false;
 
             destructionInfo.push({
@@ -1583,12 +1497,6 @@ export class Falldown {
             weld.Part0 = part0;
             weld.Part1 = part1;
 
-            const proxyNoCol0 = new Instance("NoCollisionConstraint");
-            proxyNoCol0.Name = constraintName + "_NoColProxyOnly";
-            proxyNoCol0.Parent = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part0 = ProxyMapping.get(part0.Name);
-            proxyNoCol0.Part1 = ProxyMapping.get(part1.Name);
-
             replacing.Enabled = false;
 
             destructionInfo.push({
@@ -1608,11 +1516,11 @@ export class Falldown {
 
         humanoid.EvaluateStateMachine = false;
 
-        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftFoot, rightFoot, destructionInfo, proxyGroupId, bodypartGroupId, ProxyMapping, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
+        return new ActiveRagdoll(character, height, standFadeTime, humanoid, humanoidRootPart, leftFoot, rightFoot, destructionInfo, bodypartGroupId, automaticDuration, exitMode, getupFrontTrack, getupBackTrack);
     }
 
     /** 
-     * Converts a character into a ragdoll with physics-based movement. Detects R6/R15 rig automatically, replaces Motor6Ds with constraints, creates collision proxies, and sets up automatic recovery.
+     * Converts a character into a ragdoll with physics-based movement. Detects R6/R15 rig automatically, replaces Motor6Ds with constraints, manages collision groups, and sets up automatic recovery.
      * @static
      * @param character - The character `Model` to ragdoll. Must have a Humanoid.
      * @param standupFadeTime - Duration (in seconds) for the fade clone to remain visible after standing up. Recommended: 0.3-0.7 seconds.
