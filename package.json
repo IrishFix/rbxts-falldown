@@ -1,6 +1,6 @@
 {
   "name": "@rbxts/falldown",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "A realistic ragdoll physics system for Roblox with smooth getup animations, collision management, and customizable velocity modes. Supports both R6 and R15 rigs with surface-aware positioning.",
   "main": "out/init.luau",
   "scripts": {
