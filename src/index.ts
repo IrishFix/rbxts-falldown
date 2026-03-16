@@ -1051,8 +1051,12 @@ export class Falldown {
         PhysicsService.RegisterCollisionGroup(bodypartGroupId);
         PhysicsService.CollisionGroupSetCollidable(bodypartGroupId, bodypartGroupId, false);
 
-        for (const [, originalPart] of bodyPartMap) {
+        for (const [partName, originalPart] of bodyPartMap) {
             originalPart.CollisionGroup = bodypartGroupId;
+            if (partName !== "HumanoidRootPart") {
+                originalPart.SetAttribute("Falldown_Reverse_CC_To", originalPart.CanCollide);
+                originalPart.CanCollide = true;
+            }
         }
     }
 
