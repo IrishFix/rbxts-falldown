@@ -1050,6 +1050,7 @@ export class Falldown {
     private static SetupCollisionGroup(bodyPartMap: Map<string, BasePart>, bodypartGroupId: string) {
         PhysicsService.RegisterCollisionGroup(bodypartGroupId);
         PhysicsService.CollisionGroupSetCollidable(bodypartGroupId, bodypartGroupId, false);
+        PhysicsService.CollisionGroupSetCollidable(bodypartGroupId, "Debris", false);
 
         for (const [partName, originalPart] of bodyPartMap) {
             originalPart.CollisionGroup = bodypartGroupId;
