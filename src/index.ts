@@ -467,6 +467,7 @@ class ActiveRagdoll implements IActiveRagdoll {
     /** The loaded `AnimationTrack` for the getup-from-back animation (back down), or `undefined` if no animation was provided. */
     public readonly GetupBackAnimation: AnimationTrack | undefined;
 
+    private readonly _wasShiftLockEnabled: boolean | undefined;
     private readonly _automaticDuration: number | undefined;
     private readonly _jointDestructionInfo: JointDestructionInfo[];
     private readonly _bodypartGroupId: string;
@@ -474,6 +475,14 @@ class ActiveRagdoll implements IActiveRagdoll {
     private readonly _standFadeTime: number;
 
     constructor(character: Model, objectiveHeight: number, standFadeTime: number, humanoid: Humanoid, humanoidRootPart: BasePart, leftTouchObj: BasePart, rightTouchObj: BasePart, jointDestructionInfo: JointDestructionInfo[], bodypartGroupId: string, automaticDuration: number | undefined, exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode] | undefined, getupFront: AnimationTrack | undefined, getupBack: AnimationTrack | undefined) {
+        if (Falldown.DisableShiftLockOnRagdoll) {
+            const player = Players.GetPlayerFromCharacter(character);
+            if (player) {
+                this._wasShiftLockEnabled = player.DevEnableMouseLock;
+                player.DevEnableMouseLock = false;
+            }
+        }
+
         character.Destroying.Once(() => {
             this.CharacterDead = true;
             this._jointDestructionInfo.clear();
@@ -999,6 +1008,10 @@ class ActiveRagdoll implements IActiveRagdoll {
             });
         }
 
+        if (this._wasShiftLockEnabled !== undefined && this.Owner) {
+            this.Owner.DevEnableMouseLock = this._wasShiftLockEnabled;
+        }
+
         PhysicsService.UnregisterCollisionGroup(this._bodypartGroupId);
 
         this.Destroyed.Fire();
@@ -1013,6 +1026,11 @@ class ActiveRagdoll implements IActiveRagdoll {
  * @see {@linkcode Falldown.VelocityMode}
  */
 export class Falldown {
+    /**
+     * If `true`, players will have DevEnableMouseLock set to `false` when ragdolled, preventing shift-lock mode. This is necessary to avoid camera issues while ragdolled, but may affect player preference for shift-lock. Defaults to `true`.
+     */
+    static DisableShiftLockOnRagdoll: boolean = true;
+
     /** 
      * Enum used to represent how velocity should be distributed across a ragdolled character's body parts.
      * @static
