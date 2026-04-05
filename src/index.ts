@@ -467,8 +467,11 @@ class ActiveRagdoll implements IActiveRagdoll {
     /** The loaded `AnimationTrack` for the getup-from-back animation (back down), or `undefined` if no animation was provided. */
     public readonly GetupBackAnimation: AnimationTrack | undefined;
 
+    public EndTime: number | undefined = undefined;
+
     private readonly _wasShiftLockEnabled: boolean | undefined;
     private readonly _automaticDuration: number | undefined;
+    private readonly _durationListener: RBXScriptConnection | undefined;
     private readonly _jointDestructionInfo: JointDestructionInfo[];
     private readonly _bodypartGroupId: string;
     private readonly _objectiveHeight: number;
@@ -524,8 +527,18 @@ class ActiveRagdoll implements IActiveRagdoll {
         this._standFadeTime = standFadeTime;
 
         if (this._automaticDuration && !this.CharacterDead) {
-            delay(this._automaticDuration, () => {
-                this.Destroy(exitMode || Falldown.ExitMode.Smooth);
+            this.EndTime = DateTime.now().UnixTimestampMillis + (this._automaticDuration * 1000);
+            this._durationListener = RunService.Heartbeat.Connect(() => {
+                if (this.EndTime === undefined) {
+                    this._durationListener!.Disconnect();
+                    return;
+                }
+
+                if (DateTime.now().UnixTimestampMillis >= this.EndTime) {
+                    this.EndTime = undefined;
+                    this.Destroy(exitMode || Falldown.ExitMode.Smooth);
+                    this._durationListener!.Disconnect();
+                }
             });
         }
     }
@@ -647,6 +660,8 @@ class ActiveRagdoll implements IActiveRagdoll {
      * @see {@linkcode Falldown.UnragdollCharacter}
      */
     public Destroy(exitMode: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode], overrideDeathLock?: boolean) {
+        this.EndTime = undefined;
+
         if (this.Character.Parent === undefined) {
             return;
         }
@@ -1556,7 +1571,15 @@ export class Falldown {
      * @see {@linkcode Falldown.VelocityMode}
      */
     public static RagdollCharacter(character: Model, standupFadeTime: number, automaticDuration?: number, exitMode?: (typeof Falldown.ExitMode)[keyof typeof Falldown.ExitMode], getupFront?: Animation, getupBack?: Animation): IActiveRagdoll | undefined {
-        if (this._activeRagdolls.has(character)) {
+        const existing = this._activeRagdolls.get(character);
+        if (existing) {
+            if (existing.EndTime !== undefined) {
+                if (automaticDuration !== undefined) {
+                    existing.EndTime = DateTime.now().UnixTimestampMillis + (automaticDuration * 1000);
+                } else {
+                    existing.EndTime = undefined;
+                }
+            }
 		    return undefined;
 	    }
 
